@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # Copyright (c) 2012 - 2020 YCSB contributors. All rights reserved.
 #
@@ -98,6 +98,7 @@ DATABASES = {
     "rocksdb"      : "site.ycsb.db.rocksdb.RocksDBClient",
     "s3"           : "site.ycsb.db.S3Client",
     "seaweedfs"    : "site.ycsb.db.seaweed.SeaweedClient",
+    "singlestore"  : "site.ycsb.singlestore.SingleStoreDBClient",
     "scylla"       : "site.ycsb.db.scylla.ScyllaCQLClient",
     "solr7"        : "site.ycsb.db.solr7.SolrClient",
     "tarantool"    : "site.ycsb.db.TarantoolClient",
