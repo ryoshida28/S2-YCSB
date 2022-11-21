@@ -7,10 +7,11 @@ import org.json.simple.JSONValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.singlestore.jdbc.SingleStorePoolDataSource;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -30,6 +31,9 @@ public class SingleStoreDBClient extends DB {
 
   /** The connection to the database. */
   private static Connection connection;
+
+  /** Resource pool for database connections. */
+  private static SingleStorePoolDataSource pool;
 
   /** The URL to connect to the database. */
   public static final String CONNECTION_URL = "singlestore.url";
@@ -92,7 +96,8 @@ public class SingleStoreDBClient extends DB {
         tmpProps.setProperty("user", user);
         tmpProps.setProperty("password", passwd);
 
-        connection = DriverManager.getConnection(urls + "?user=" + user + "&password=" + passwd);
+        // connection = DriverManager.getConnection(urls + "?user=" + user + "&password=" + passwd);
+        pool = new SingleStorePoolDataSource(urls + "?user=" + user + "&password=" + passwd + "&maxPoolSize=20");
         
       } catch (Exception e) {
         LOG.error("Error during initialization: " + e);
@@ -103,11 +108,7 @@ public class SingleStoreDBClient extends DB {
   @Override
   public void cleanup() throws DBException {
     if (INIT_COUNT.decrementAndGet() == 0) {
-      try {
-        connection.close();
-      } catch (SQLException e) {
-        System.err.println("Error in cleanup execution. " + e);
-      }
+      pool.close();
     }
   }
 
@@ -128,8 +129,9 @@ public class SingleStoreDBClient extends DB {
     readQuery.append(" = ");
     readQuery.append(literalToSQLString(key));
 
-    try {
-      Statement stmt = connection.createStatement();
+    try (Connection connection = pool.getConnection();
+      Statement stmt = connection.createStatement()) {
+
       ResultSet resultSet = stmt.executeQuery(readQuery.toString());
       if (!resultSet.next()) {
         resultSet.close();
@@ -183,11 +185,9 @@ public class SingleStoreDBClient extends DB {
     scanQuery.append(PRIMARY_KEY);
     scanQuery.append(" LIMIT " + recordcount);
 
-    try {
-      Statement stmt = connection.createStatement();
+    try (Connection connection = pool.getConnection();
+      Statement stmt = connection.createStatement()) {
       ResultSet resultSet = stmt.executeQuery(scanQuery.toString());
-
-
       int i = 0;
       for (; i < recordcount && resultSet.next(); ++i) {
         if (result != null) {
@@ -218,7 +218,6 @@ public class SingleStoreDBClient extends DB {
       if (i == 0 && recordcount > 0) {
         return  Status.NOT_FOUND;
       }
-
       return Status.OK;
     } catch (SQLException e) {
       LOG.error("Error in processing scan of table: " + tableName + ": " + e);
@@ -240,8 +239,8 @@ public class SingleStoreDBClient extends DB {
         updateQuery.append(literalToSQLString(entry.getValue().toString()));
         updateQuery.append(")");
         updateQuery.append(" WHERE " + PRIMARY_KEY + " = " + literalToSQLString(key));
-        try {
-          Statement stmt = connection.createStatement();
+        try (Connection connection = pool.getConnection();
+          Statement stmt = connection.createStatement()) {
           int result = stmt.executeUpdate(updateQuery.toString());
         } catch (SQLException e) {
           LOG.error("Error when updating a path(useJsonSet):{},tableName:{}", key, tableName, e);
@@ -254,9 +253,9 @@ public class SingleStoreDBClient extends DB {
       StringBuilder readQuery = new StringBuilder("SELECT " + COLUMN_NAME + " AS " + COLUMN_NAME);
       readQuery.append(" FROM " + tableName);
       readQuery.append(" WHERE " + PRIMARY_KEY + "=" + literalToSQLString(key));
-      try {
-        Statement stmt1 = connection.createStatement();
-        ResultSet resultSet = stmt1.executeQuery(readQuery.toString());
+      try (Connection connection = pool.getConnection();
+        Statement stmt = connection.createStatement()) {
+        ResultSet resultSet = stmt.executeQuery(readQuery.toString());
         if (!resultSet.next()) {
           resultSet.close();
           return  Status.NOT_FOUND;
@@ -273,8 +272,7 @@ public class SingleStoreDBClient extends DB {
         updateQuery.append(literalToSQLString(jsonObject.toJSONString()));
         updateQuery.append(" WHERE " + PRIMARY_KEY + " = " + literalToSQLString(key));
 
-        Statement stmt2 = connection.createStatement();
-        int result = stmt2.executeUpdate(updateQuery.toString());
+        int result = stmt.executeUpdate(updateQuery.toString());
         return Status.OK;
       } catch (SQLException e) {
         LOG.error("Error when updating a path:{},tableName:{}", key, tableName, e);
@@ -299,8 +297,8 @@ public class SingleStoreDBClient extends DB {
     }
     insertQuery.append("))");
 
-    try {
-      Statement stmt = connection.createStatement();
+    try (Connection connection = pool.getConnection();
+      Statement stmt = connection.createStatement()) {
       int result = stmt.executeUpdate(insertQuery.toString());
       if (result == 1) {
         return Status.OK;
@@ -318,8 +316,8 @@ public class SingleStoreDBClient extends DB {
     StringBuilder deleteQuery = new StringBuilder("DELETE FROM " + tableName);
     deleteQuery.append(" WHERE " + PRIMARY_KEY + "=" + literalToSQLString(key));
 
-    try {
-      Statement stmt = connection.createStatement();
+    try (Connection connection = pool.getConnection();
+      Statement stmt = connection.createStatement()) {
       int result = stmt.executeUpdate(deleteQuery.toString());
       if (result == 1) {
         return Status.OK;
