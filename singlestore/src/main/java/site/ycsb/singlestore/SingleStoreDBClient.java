@@ -47,6 +47,9 @@ public class SingleStoreDBClient extends DB {
   /** Whether or not to use JSON_SET in update queries. */
   public static final String USE_JSON_SET = "singlestore.use_json_set";
 
+  /** The maximum size of the connection pool. */
+  public static final String MAX_POOOL_SIZE = "singlestore.max_pool_size";
+
   /** The primary key in the user table. */
   public static final String PRIMARY_KEY = "YCSB_KEY";
 
@@ -86,18 +89,15 @@ public class SingleStoreDBClient extends DB {
       String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
       String passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
       useJsonSet = getBoolProperty(props, USE_JSON_SET, false);
-
-      System.out.println("urls = " + urls);
-      System.out.println("user = " + user);
-      System.out.println("passwd = " + passwd);
+      String maxPoolSize = props.getProperty(MAX_POOOL_SIZE, "1");
 
       try {
         Properties tmpProps = new Properties();
         tmpProps.setProperty("user", user);
         tmpProps.setProperty("password", passwd);
 
-        // connection = DriverManager.getConnection(urls + "?user=" + user + "&password=" + passwd);
-        pool = new SingleStorePoolDataSource(urls + "?user=" + user + "&password=" + passwd + "&maxPoolSize=20");
+        pool = new SingleStorePoolDataSource(urls + "?user=" + user + "&password=" + passwd +
+            "&maxPoolSize=" + maxPoolSize);
         
       } catch (Exception e) {
         LOG.error("Error during initialization: " + e);
