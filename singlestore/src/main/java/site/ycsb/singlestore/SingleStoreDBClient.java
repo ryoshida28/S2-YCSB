@@ -84,6 +84,9 @@ public class SingleStoreDBClient extends DB {
   public void init() throws DBException {
     INIT_COUNT.incrementAndGet();
     synchronized (SingleStoreDBClient.class) {
+      if (pool != null) {
+        return;
+      }
       Properties props = getProperties();
       String urls = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
       String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
