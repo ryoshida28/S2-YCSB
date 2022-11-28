@@ -100,7 +100,7 @@ public class SingleStoreDBClient extends DB {
         tmpProps.setProperty("password", passwd);
 
         pool = new SingleStorePoolDataSource(urls + "?user=" + user + "&password=" + passwd +
-            "&maxPoolSize=" + maxPoolSize);
+            "&maxPoolSize=" + maxPoolSize + "&autocommit=false");
         
       } catch (Exception e) {
         LOG.error("Error during initialization: " + e);
@@ -111,6 +111,12 @@ public class SingleStoreDBClient extends DB {
   @Override
   public void cleanup() throws DBException {
     if (INIT_COUNT.decrementAndGet() == 0) {
+      try (Connection connection = pool.getConnection();
+        Statement stmt = connection.createStatement()) {
+        connection.commit();
+      } catch (SQLException e) {
+        LOG.error("Error in processing commit");
+      }
       pool.close();
     }
   }
@@ -135,6 +141,8 @@ public class SingleStoreDBClient extends DB {
     try (Connection connection = pool.getConnection();
       Statement stmt = connection.createStatement()) {
 
+      stmt.setFetchSize(1);
+      
       ResultSet resultSet = stmt.executeQuery(readQuery.toString());
       if (!resultSet.next()) {
         resultSet.close();
@@ -190,6 +198,7 @@ public class SingleStoreDBClient extends DB {
 
     try (Connection connection = pool.getConnection();
       Statement stmt = connection.createStatement()) {
+      stmt.setFetchSize(recordcount);
       ResultSet resultSet = stmt.executeQuery(scanQuery.toString());
       int i = 0;
       for (; i < recordcount && resultSet.next(); ++i) {
@@ -245,6 +254,7 @@ public class SingleStoreDBClient extends DB {
         try (Connection connection = pool.getConnection();
           Statement stmt = connection.createStatement()) {
           int result = stmt.executeUpdate(updateQuery.toString());
+          connection.commit();
         } catch (SQLException e) {
           LOG.error("Error when updating a path(useJsonSet):{},tableName:{}", key, tableName, e);
           return Status.ERROR;
@@ -276,6 +286,7 @@ public class SingleStoreDBClient extends DB {
         updateQuery.append(" WHERE " + PRIMARY_KEY + " = " + literalToSQLString(key));
 
         int result = stmt.executeUpdate(updateQuery.toString());
+        connection.commit();
         return Status.OK;
       } catch (SQLException e) {
         LOG.error("Error when updating a path:{},tableName:{}", key, tableName, e);
@@ -303,6 +314,7 @@ public class SingleStoreDBClient extends DB {
     try (Connection connection = pool.getConnection();
       Statement stmt = connection.createStatement()) {
       int result = stmt.executeUpdate(insertQuery.toString());
+      connection.commit();
       if (result == 1) {
         return Status.OK;
       }
@@ -322,6 +334,7 @@ public class SingleStoreDBClient extends DB {
     try (Connection connection = pool.getConnection();
       Statement stmt = connection.createStatement()) {
       int result = stmt.executeUpdate(deleteQuery.toString());
+      connection.commit();
       if (result == 1) {
         return Status.OK;
       }
